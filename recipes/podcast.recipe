@@ -1,0 +1,7 @@
+# Podcast polish recipe
+# ops run in order; result of each step feeds the next
+cut                 # auto-editor silence removal
+denoise             # anlmdn noise reduction
+master -16          # EBU R128 normalize to -16 LUFS (YouTube)
+transcribe srt      # whisper.cpp
+caption modern      # burn captions, modern style

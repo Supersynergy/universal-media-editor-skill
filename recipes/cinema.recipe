@@ -1,0 +1,5 @@
+# Cinematic release
+denoise
+master -23          # EBU TV broadcast
+transcribe srt
+caption cinema

@@ -1,0 +1,7 @@
+samples/*.mp4
+samples/*.mov
+samples/*.mkv
+samples/*.wav
+*.srt
+*.zip
+.DS_Store

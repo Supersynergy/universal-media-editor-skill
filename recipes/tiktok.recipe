@@ -1,0 +1,5 @@
+# TikTok / Reels polish
+cut
+master -14          # -14 LUFS (Spotify/social media loud)
+transcribe srt
+caption tiktok      # big yellow outlined text, centered low
