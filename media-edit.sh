@@ -451,6 +451,235 @@ ENV
 EOF
 }
 
+# ════════════════════════════════════════════════════════════════
+#  v1.1 — VIRAL SHORTS PRIMITIVES
+# ════════════════════════════════════════════════════════════════
+
+# me_beats — emit beat timestamps (librosa)
+me_beats() {
+  _me_init
+  local input="$1" output="${2:-${1%.*}_beats.txt}"
+  [ -f "$input" ] || { echo "❌ Not found: $input" >&2; return 1; }
+  _me_have python3 || { echo "❌ Need python3" >&2; return 1; }
+  echo "🥁 Beat detection (librosa) → $output"
+  python3 - "$input" "$output" <<'PY'
+import sys, librosa
+y, sr = librosa.load(sys.argv[1], sr=None)
+tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+ts = librosa.frames_to_time(beats, sr=sr)
+with open(sys.argv[2], 'w') as f:
+    f.write(f"# tempo={float(tempo):.1f} bpm\n")
+    for t in ts:
+        f.write(f"{t:.3f}\n")
+print(f"  tempo={float(tempo):.1f} bpm, {len(ts)} beats")
+PY
+  _me_track beats; _me_done
+  echo "✅ $output"
+}
+
+# me_hook — find the top 3-second hook window by audio energy
+me_hook() {
+  _me_init
+  local input="$1" dur="${2:-3}" output="${3:-${1%.*}_hook.mp4}"
+  [ -f "$input" ] || { echo "❌ Not found: $input" >&2; return 1; }
+  echo "🎯 Hook detection (top ${dur}s by audio energy) → $output"
+  local start
+  start=$(python3 - "$input" "$dur" <<'PY'
+import sys, numpy as np, librosa
+y, sr = librosa.load(sys.argv[1], sr=None, mono=True)
+dur = float(sys.argv[2])
+win = int(dur * sr)
+if len(y) <= win:
+    print(0.0); sys.exit(0)
+rms = librosa.feature.rms(y=y, frame_length=win, hop_length=sr//4).flatten()
+best_frame = int(np.argmax(rms))
+print(f"{best_frame * (sr//4) / sr:.3f}")
+PY
+)
+  echo "  → best start: ${start}s"
+  ffmpeg -y -ss "$start" -t "$dur" -i "$input" -c copy -avoid_negative_ts make_zero "$output" 2>&1 | tail -1
+  _me_track hook; _me_done
+  echo "✅ $output"
+}
+
+# me_transition — ffmpeg xfade between two clips
+me_transition() {
+  _me_init
+  local a="$1" b="$2" preset="${3:-smoothleft}" output="${4:-transition.mp4}"
+  local t="${5:-1.0}"  # transition duration
+  [ -f "$a" ] && [ -f "$b" ] || { echo "Usage: me_transition <a.mp4> <b.mp4> [preset] [out] [dur]"; return 1; }
+  local da
+  da=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$a" | awk '{printf "%.3f", $1-'"$t"'}')
+  echo "🎞  Transition '$preset' (${t}s) → $output"
+  ffmpeg -y -i "$a" -i "$b" \
+    -filter_complex "[0][1]xfade=transition=${preset}:duration=${t}:offset=${da}[v];[0:a][1:a]acrossfade=d=${t}[a]" \
+    -map "[v]" -map "[a]" "$output" 2>&1 | tail -1
+  _me_track transition; _me_done
+  echo "✅ $output"
+}
+
+# me_lut — color grade via 3D LUT
+me_lut() {
+  _me_init
+  local input="$1" lut="$2" output="${3:-${1%.*}_graded.${1##*.}}"
+  [ -f "$input" ] && [ -f "$lut" ] || { echo "Usage: me_lut <video> <lut.cube> [out]"; return 1; }
+  echo "🎨 LUT grade ($lut) → $output"
+  ffmpeg -y -i "$input" -vf "lut3d=${lut}" -c:a copy "$output" 2>&1 | tail -1
+  _me_track lut; _me_done
+  echo "✅ $output"
+}
+
+# me_duck — sidechain compress music under dialogue
+me_duck() {
+  _me_init
+  local voice="$1" music="$2" output="${3:-${1%.*}_ducked.mp3}"
+  [ -f "$voice" ] && [ -f "$music" ] || { echo "Usage: me_duck <voice> <music> [out]"; return 1; }
+  echo "🎚  Sidechain duck music under voice → $output"
+  ffmpeg -y -i "$voice" -i "$music" \
+    -filter_complex "[1:a][0:a]sidechaincompress=threshold=0.03:ratio=8:attack=5:release=250[ducked];[0:a][ducked]amix=inputs=2:duration=first:weights=1 0.7[a]" \
+    -map "[a]" -b:a 256k "$output" 2>&1 | tail -1
+  _me_track duck; _me_done
+  echo "✅ $output"
+}
+
+# me_sfx_init — prime an SFX directory with silence placeholders
+me_sfx_init() {
+  local dir="$HOME/.media-edit/sfx"
+  echo "🔊 Initialising SFX directory at $dir"
+  for sub in transitions impacts dynamics textures pads; do
+    mkdir -p "$dir/$sub"
+  done
+  cat > "$dir/README.md" <<'EOF'
+# SFX Kit
+
+Drop your sound effects here. Suggested free sources:
+
+- BBC Sound Effects Archive (33k+ CC BY-NC): https://sound-effects.bbcrewind.co.uk
+- Freesound.org (CC, API key): https://freesound.org
+- Mixkit (commercial-free, no signup): https://mixkit.co/free-sound-effects/
+
+Categories:
+  transitions/  — whooshes, swipes
+  impacts/      — pops, thuds, coins
+  dynamics/     — bass drops, risers
+  textures/     — typewriter, vinyl
+  pads/         — ambient beds
+EOF
+  echo "✅ $dir ready — drop your WAV/MP3 files in."
+}
+
+# me_broll — fetch stock clips from Pexels API (free, needs PEXELS_API_KEY env)
+me_broll() {
+  _me_init
+  local topic="$1" count="${2:-3}" outdir="${3:-broll}"
+  [ -z "$topic" ] && { echo "Usage: me_broll <topic> [count] [outdir]"; return 1; }
+  [ -z "${PEXELS_API_KEY:-}" ] && { echo "❌ Set PEXELS_API_KEY (free at https://www.pexels.com/api/)"; return 1; }
+  mkdir -p "$outdir"
+  echo "🎞  Fetching $count B-roll clips for '$topic' from Pexels…"
+  local json
+  json=$(curl -fsSL -H "Authorization: $PEXELS_API_KEY" \
+    "https://api.pexels.com/videos/search?query=${topic// /%20}&per_page=${count}&orientation=portrait")
+  python3 - "$json" "$outdir" <<'PY' || echo "❌ parse failed"
+import sys, json, urllib.request, os
+data = json.loads(sys.argv[1])
+outdir = sys.argv[2]
+for i, v in enumerate(data.get("videos", [])):
+    files = sorted(v["video_files"], key=lambda f: -f.get("width", 0))
+    if not files: continue
+    url = files[0]["link"]
+    path = os.path.join(outdir, f"broll_{i+1}.mp4")
+    print(f"  → {path}")
+    urllib.request.urlretrieve(url, path)
+print("done")
+PY
+  _me_track broll; _me_done
+}
+
+# me_captions_word — whisperX word-level karaoke-style caption burn
+me_captions_word() {
+  _me_init
+  local input="$1" output="${2:-${1%.*}_wcap.mp4}" style="${3:-tiktok}"
+  [ -f "$input" ] || { echo "❌ Not found: $input" >&2; return 1; }
+  _me_have whisperx || { echo "❌ Need whisperx (uv tool install whisperx)"; return 1; }
+  local base="${input%.*}"
+  echo "📝 whisperX word-level timing → ASS karaoke"
+  whisperx "$input" --model small --output_format srt --output_dir "$(dirname "$input")" >/dev/null 2>&1
+  local fs
+  case "$style" in
+    tiktok) fs="Fontname=Arial Black,Fontsize=40,PrimaryColour=&H00FFFF00,OutlineColour=&HFF000000,BorderStyle=1,Outline=4,Alignment=2,MarginV=140" ;;
+    *)      fs="Fontname=Helvetica Neue,Fontsize=32,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,Outline=2,Alignment=2,MarginV=80" ;;
+  esac
+  if [ "$ME_VTB" = "1" ]; then
+    ffmpeg -y -i "$input" -vf "subtitles=${base}.srt:force_style='${fs}'" \
+      -c:v hevc_videotoolbox -b:v 4000k -c:a copy "$output" 2>&1 | tail -1
+  else
+    ffmpeg -y -i "$input" -vf "subtitles=${base}.srt:force_style='${fs}'" \
+      -c:v libx264 -crf 23 -c:a copy "$output" 2>&1 | tail -1
+  fi
+  _me_track captions_word; _me_done
+  echo "✅ $output"
+}
+
+# me_shorts — THE viral pipeline: hook + cut + denoise + master + captions + LUT
+me_shorts() {
+  _me_init
+  local input="$1" output="${2:-${1%.*}_short.mp4}" style="${3:-tiktok}"
+  [ -f "$input" ] || { echo "❌ Not found: $input" >&2; return 1; }
+
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "✨ VIRAL SHORTS PIPELINE — $input"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  local work; work=$(mktemp -d)
+  local cur="$input"
+
+  echo "[1/6] 🎯 hook detection (top 15s of audio energy)"
+  me_hook "$cur" 15 "$work/1_hook.mp4" >/dev/null 2>&1 && cur="$work/1_hook.mp4"
+
+  echo "[2/6] ✂️  silence cut"
+  if _me_have auto-editor; then
+    auto-editor "$cur" -o "$work/2_cut.mp4" --no-open >/dev/null 2>&1 && cur="$work/2_cut.mp4"
+  fi
+
+  echo "[3/6] 🔇 denoise"
+  ffmpeg -y -i "$cur" -af "highpass=f=80,anlmdn=s=7:p=0.002:r=0.01,lowpass=f=12000" \
+    -c:v copy "$work/3_dn.mp4" 2>/dev/null && cur="$work/3_dn.mp4"
+
+  echo "[4/6] 🎚  master to -14 LUFS (social)"
+  if _me_have ffmpeg-normalize; then
+    ffmpeg-normalize "$cur" -o "$work/4_norm.mp4" -f -t -14 --loudness-range-target 7 -c:a aac -b:a 256k >/dev/null 2>&1 && cur="$work/4_norm.mp4"
+  else
+    ffmpeg -y -i "$cur" -af "loudnorm=I=-14:TP=-1:LRA=7" -c:v copy "$work/4_norm.mp4" 2>/dev/null && cur="$work/4_norm.mp4"
+  fi
+
+  echo "[5/6] 📝 transcribe (whisper.cpp Metal)"
+  cp "$cur" "$work/pre_cap.mp4"
+  ( cd "$work" && me_transcribe pre_cap.mp4 srt >/dev/null 2>&1 )
+
+  echo "[6/6] 🎨 burn $style captions"
+  local fs
+  case "$style" in
+    tiktok) fs="Fontname=Arial Black,Fontsize=40,PrimaryColour=&H00FFFF00,OutlineColour=&HFF000000,BorderStyle=1,Outline=4,Alignment=2,MarginV=140" ;;
+    cinema) fs="Fontname=Helvetica,Fontsize=24,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=1,Alignment=2,MarginV=40" ;;
+    *)      fs="Fontname=Helvetica Neue,Fontsize=32,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,Outline=2,Shadow=1,Alignment=2,MarginV=80" ;;
+  esac
+  if [ -f "$work/pre_cap.srt" ]; then
+    if [ "$ME_VTB" = "1" ]; then
+      ffmpeg -y -i "$work/pre_cap.mp4" -vf "subtitles=$work/pre_cap.srt:force_style='${fs}'" \
+        -c:v hevc_videotoolbox -b:v 4000k -c:a copy "$output" 2>/dev/null
+    else
+      ffmpeg -y -i "$work/pre_cap.mp4" -vf "subtitles=$work/pre_cap.srt:force_style='${fs}'" \
+        -c:v libx264 -crf 23 -c:a copy "$output" 2>/dev/null
+    fi
+  else
+    cp "$cur" "$output"
+  fi
+
+  rm -rf "$work"
+  _me_track shorts; _me_done
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "✅ Viral short → $output"
+}
+
 # Router for `media-edit <cmd>` style CLI invocation
 media-edit() {
   local cmd="$1"; shift || true
@@ -473,6 +702,15 @@ media-edit() {
     syncsub)    me_syncsub "$@" ;;
     polish)     me_polish "$@" ;;
     recipe)     me_recipe "$@" ;;
+    shorts)     me_shorts "$@" ;;
+    hook)       me_hook "$@" ;;
+    beats)      me_beats "$@" ;;
+    transition) me_transition "$@" ;;
+    lut)        me_lut "$@" ;;
+    duck)       me_duck "$@" ;;
+    broll)      me_broll "$@" ;;
+    sfx-init)   me_sfx_init ;;
+    captions-word) me_captions_word "$@" ;;
     *)          echo "Unknown command: $cmd"; me_help; return 1 ;;
   esac
 }
