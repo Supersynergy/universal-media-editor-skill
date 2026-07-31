@@ -23,7 +23,7 @@
 
 ### **Polish any video or audio on your Mac. One command.**
 
-**Cut silences. Transcribe. Burn captions. Denoise. Master to broadcast loudness. Separate stems. Detect scenes. Resync subtitles.** All in one adaptive CLI — Metal-accelerated where it matters, 100% local, zero cloud.
+**Cut silences. Transcribe. Burn captions. Denoise. Master to broadcast loudness. Separate stems. Detect scenes. Resync subtitles.** All in one adaptive CLI, Metal-accelerated where it matters, 100% local, zero cloud.
 
 ```bash
 media-edit polish raw_podcast.mp4
@@ -31,16 +31,16 @@ media-edit polish raw_podcast.mp4
 ```
 
 [![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
-[![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-Metal-555?logo=apple&logoColor=white)](#-how-it-adapts)
+[![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-Metal-555?logo=apple&logoColor=white)](#how-it-adapts)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![ShellCheck](https://github.com/Supersynergy/universal-media-editor-skill/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/Supersynergy/universal-media-editor-skill/actions/workflows/shellcheck.yml)
+[![ShellCheck](https://github.com/Supersynergy/media-edit/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/Supersynergy/media-edit/actions/workflows/shellcheck.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 </div>
 
 ---
 
-## ⚡ 60 seconds
+## 60 seconds
 
 ```bash
 media-edit polish lecture.mov              # full pipeline, done.
@@ -58,24 +58,24 @@ That's the whole API. Each primitive routes to the best-in-class local tool. `po
 
 ---
 
-## 📦 Install
+## Install
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-media-editor-skill/main/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Supersynergy/media-edit/main/install.sh)"
 ```
 
-Read [install.sh](install.sh) first — it's ~70 lines. Uninstall any time with the matching `uninstall.sh`.
+Read [install.sh](install.sh) first, it's ~70 lines. Uninstall any time with the matching `uninstall.sh`.
 
 **What gets installed:**
 
-- **Brew**: `ffmpeg` `whisper-cpp` `rubberband` `sox` `alass` `mediainfo` `mpv`
-- **uv tools**: `auto-editor` `demucs` `scenedetect` `ffmpeg-normalize`
-- **The shell**: `media-edit.sh` sourced into your `~/.zshrc`
-- **Skill file**: dropped into `~/.gg/skills/` if it exists (optional — for Claude Code / GG Coder / AI agents)
+- Brew: `ffmpeg` `whisper-cpp` `rubberband` `sox` `alass` `mediainfo` `mpv`
+- uv tools: `auto-editor` `demucs` `scenedetect` `ffmpeg-normalize`
+- The shell: `media-edit.sh` sourced into your `~/.zshrc`
+- Skill file: dropped into `~/.gg/skills/` if it exists (optional, for Claude Code / GG Coder / AI agents)
 
 ---
 
-## 🎯 What each command owns
+## What each command owns
 
 | Command            | Tool underneath             | Why it's the right pick                                         |
 |--------------------|-----------------------------|------------------------------------------------------------------|
@@ -93,7 +93,7 @@ Read [install.sh](install.sh) first — it's ~70 lines. Uninstall any time with 
 
 ---
 
-## ✨ `polish` — the killer feature
+## `polish`: the killer feature
 
 ```bash
 media-edit polish raw.mp4 polished.mp4 modern
@@ -113,7 +113,7 @@ Result: a captioned, denoised, loudness-correct, silence-trimmed video in one co
 
 ---
 
-## 📋 Recipes
+## Recipes
 
 Pipelines as plain text. Ship one per use-case:
 
@@ -134,7 +134,7 @@ Bundled recipes: **podcast** (-16 LUFS, modern captions), **tiktok** (-14 LUFS, 
 
 ---
 
-## 🧠 How it adapts
+## How it adapts
 
 `me_info` detects your Mac on first use:
 
@@ -150,9 +150,9 @@ Override anytime: `ME_WHISPER_MODEL=large-v3 media-edit transcribe …`
 
 ---
 
-## 🆚 Sister skill
+## Sister skill
 
-Need *format conversion* (MP4↔MKV, WAV↔MP3, PNG↔AVIF)? Use **[`conv`](https://github.com/Supersynergy/universal-file-media-converter-skill)** — the sibling skill. They're designed to chain:
+Need *format conversion* (MP4↔MKV, WAV↔MP3, PNG↔AVIF)? Use **[`conv`](https://github.com/Supersynergy/conv)**, the sibling skill. They're designed to chain:
 
 ```bash
 conv raw.mov working.mp4           # normalize container
@@ -162,7 +162,7 @@ conv polished.mp4 final.webm       # re-encode for distribution
 
 ---
 
-## 🥚 Easter eggs
+## Easter eggs
 
 ```bash
 media-edit joke      # encoding joke
@@ -170,32 +170,32 @@ media-edit zen       # editing koan
 media-edit stats     # lifetime ops counter + most-used commands
 ```
 
-Plus a daily whisper.cpp model download notification, optional completion chime (`ME_SOUND=0` to silence), and — you'll find the rest.
+Plus a daily whisper.cpp model download notification, optional completion chime (`ME_SOUND=0` to silence), and you'll find the rest.
 
 ---
 
-## 🤖 AI agent integration
+## AI agent integration
 
 Drops `skill/universal-media-editor.md` into `~/.gg/skills/` on install. Claude Code, GG Coder, and similar agents will route *editing* requests through `media-edit` and *conversion* requests through `conv`. Natural split.
 
 ---
 
-## ⚠️ Honest limits
+## Honest limits
 
-- **macOS only.** The adaptive profile and Metal paths are Apple-specific.
-- **`polish` is opinionated.** It assumes spoken content. For music mastering, use `master` + `stems` directly.
-- **Whisper models download on first transcribe** (~150 MB for base.en, ~3 GB for large-v3). Cached to `~/.cache/whisper.cpp/`.
-- **Subtitle timing** from Whisper is segment-level. For word-level karaoke timing, run `faster-whisper` with `--word_timestamps`.
+- macOS only. The adaptive profile and Metal paths are Apple-specific.
+- `polish` is opinionated. It assumes spoken content. For music mastering, use `master` + `stems` directly.
+- Whisper models download on first transcribe (~150 MB for base.en, ~3 GB for large-v3). Cached to `~/.cache/whisper.cpp/`.
+- Subtitle timing from Whisper is segment-level. For word-level karaoke timing, run `faster-whisper` with `--word_timestamps`.
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Most-wanted: **new recipes** for your workflow, **M1/M2/Ultra benchmarks**, **additional primitives**.
 
-## 📜 License
+## License
 
-MIT — by [Maxim Supersynergy](https://github.com/Supersynergy).
+MIT, by [Maxim Supersynergy](https://github.com/Supersynergy).
 
 ---
 
